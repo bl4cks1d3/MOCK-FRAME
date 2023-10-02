@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Análise de Copybook COBOL</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Análise de Copybook COBOL</h1>
+        <div>
+            <input type="file" id="copybookFile">
+            <button onclick="analisarCopybook()" class="btn btn-primary">Analisar Copybook</button>
+        </div>
+        <div id="resultados" class="mt-4"></div>
+        <div id="dadosMock" class="mt-4"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <script>
+        function analisarCopybook() {
+            var copybookFile = document.getElementById("copybookFile").files[0];
+
+            if (copybookFile) {
+                var reader = new FileReader();
+
+                reader.onload = function (e) {
+                    var copybookContent = e.target.result;
+                    var regex = /(\w+)-(.+)\s+PIC\s+(.+)/g;
+                    var matches;
+                    var resultados = [];
+
+                    while ((matches = regex.exec(copybookContent)) !== null) {
+                        var campo = {
+                            nome: matches[1] + '-' + matches[2],
+                            tipo: matches[3].trim(),
+                            tamanho: calcularTamanhoExato(matches[3].trim()),
+                            comp3: verificarComp3(matches[3].trim())
+                        };
+
+                        resultados.push(campo);
+                    }
+
+                    exibirResultados(resultados);
+                };
+
+                reader.readAsText(copybookFile);
+            } else {
+                alert("Selecione um arquivo Copybook COBOL.");
+            }
+        }
+
+        function calcularTamanho(tipo) {
+            var tamanho = 0;
+
+            if (tipo.startsWith("X")) {
+                var sizeMatch = tipo.match(/X\((\d+)\)/);
+
+                if (sizeMatch) {
+                    tamanho = parseInt(sizeMatch[1]);
+                }
+            } else if (tipo.startsWith("9")) {
+                var sizeMatch = tipo.match(/9\((\d+)\)/);
+
+                if (sizeMatch) {
+                    tamanho = parseInt(sizeMatch[1]);
+                }
+            }
+
+            return tamanho;
+        }
+
+        function verificarComp3(tipo) {
+            return tipo.includes("COMP-3");
+        }
+
+        function calcularTamanhoExato(tipo) {
+            var tamanho = calcularTamanho(tipo);
+
+            if (tipo.includes("S9")) {
+                var s9SizeMatch = tipo.match(/S9\((\d+)\)/);
+
+                if (s9SizeMatch) {
+                    var s9Size = parseInt(s9SizeMatch[1]);
+                    tamanho = s9Size;
+                }q\
+            }
+
+            if (tipo.includes("S9") && tipo.includes("V9")) {
+                var s9SizeMatch = tipo.match(/S9\((\d+)\)/);
+                var v9SizeMatch = tipo.match(/V9\((\d+)\)/);
+
+                if (s9SizeMatch && v9SizeMatch) {
+                    var s9Size = parseInt(s9SizeMatch[1]);
+                    var v9Size = parseInt(v9SizeMatch[1]);
+                    tamanho = s9Size + v9Size + 1;
+                }
+            }
+
+            if (tipo.includes("COMP-3")) {
+                tamanho = Math.floor((tamanho + 1) / 2);
+            }
+
+            return tamanho;
+        }
+
+        function gerarDadosMock() {
+    var resultadosContainer = document.getElementById("resultados");
+    var dadosMockContainer = document.getElementById("dadosMock");
+    dadosMockContainer.innerHTML = "";
+
+    var dadosMock = {};
+
+    for (var i = 0; i < resultados.length; i++) {
+        var campo = resultados[i];
+        var nomeCampo = campo.nome.replace("-", "_");
+
+        var inputId = "input_" + nomeCampo;
+        var inputValue = document.getElementById(inputId).value;
+
+        if (inputValue !== "") {
+            dadosMock[nomeCampo] = inputValue;
+        } else {
+            dadosMock[nomeCampo] = gerarDadoMock(campo.tipo, campo.tamanho);
+        }
+    }
+
+    var json = JSON.stringify(dadosMock, null, 2);
+    dadosMockContainer.textContent = json;
+}
+
+        function gerarDadoMock(tipo, tamanho) {
+            var dadoMock = "";
+
+            if (tipo.startsWith("X")) {
+                dadoMock = gerarDadoMockString(tamanho);
+            } else if (tipo.startsWith("9")) {
+                dadoMock = gerarDadoMockNumerico(tamanho);
+            }
+
+            return dadoMock;
+        }
+
+        function gerarDadoMockString(tamanho) {
+            var caracteres = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            var dadoMock = "";
+
+            for (var i = 0; i < tamanho; i++) {
+                var randomIndex = Math.floor(Math.random() * caracteres.length);
+                dadoMock += caracteres.charAt(randomIndex);
+            }
+
+            return dadoMock;
+        }
+
+        function gerarDadoMockNumerico(tamanho) {
+            var numeros = "0123456789";
+            var dadoMock = "";
+
+            for (var i = 0; i < tamanho; i++) {
+                var randomIndex = Math.floor(Math.random() * numeros.length);
+                dadoMock += numeros.charAt(randomIndex);
+            }
+
+            return dadoMock;
+        }
+
+        function exibirResultados(resultados) {
+            var resultadosContainer = document.getElementById("resultados");
+            resultadosContainer.innerHTML = "";
+
+            if (resultados.length > 0) {
+                var tabela = document.createElement("table");
+                tabela.classList.add("table");
+
+                var cabecalho = tabela.createTHead();
+                var linhaCabecalho = cabecalho.insertRow();
+                var colunaNomeCabecalho = linhaCabecalho.insertCell();
+                colunaNomeCabecalho.textContent = "Nome do Campo";
+                var colunaTipoCabecalho = linhaCabecalho.insertCell();
+                colunaTipoCabecalho.textContent = "Tipo (COBOL)";
+                var colunaComp3Cabecalho = linhaCabecalho.insertCell();
+                colunaComp3Cabecalho.textContent = "COMP-3";
+                var colunaTamanhoCabecalho = linhaCabecalho.insertCell();
+                colunaTamanhoCabecalho.textContent = "Tamanho";
+                var colunaValorFixoCabecalho = linhaCabecalho.insertCell();
+                colunaValorFixoCabecalho.textContent = "Valor Fixo";
+
+                var corpoTabela = tabela.createTBody();
+
+                for (var i = 0; i < resultados.length; i++) {
+                    var campo = resultados[i];
+                    var linha = corpoTabela.insertRow();
+
+                    var colunaNome = linha.insertCell();
+                    colunaNome.textContent = campo.nome;
+
+                    var colunaTipo = linha.insertCell();
+                    colunaTipo.textContent = campo.tipo;
+
+                    var colunaComp3 = linha.insertCell();
+                    colunaComp3.textContent = campo.comp3 ? "SIM" : "NÃO";
+
+                    var colunaTamanho = linha.insertCell();
+                    colunaTamanho.textContent = campo.tamanho;
+
+                    var colunaValorFixo = linha.insertCell();
+                    colunaValorFixo.innerHTML = '<input type="text" id="input_' + campo.nome.replace("-", "_") + '" class="form-control">';
+                }
+
+                resultadosContainer.appendChild(tabela);
+
+                var gerarDadosMockBtn = document.createElement("button");
+                gerarDadosMockBtn.textContent = "Gerar Dados Mock";
+                gerarDadosMockBtn.classList.add("btn", "btn-success", "mt-3");
+                gerarDadosMockBtn.onclick = gerarDadosMock;
+                resultadosContainer.appendChild(gerarDadosMockBtn);
+            } else {
+                resultadosContainer.textContent = "Nenhum campo encontrado no Copybook COBOL.";
+            }
+        }
+    </script>
+</body>
+</html>

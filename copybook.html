@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Analisador de Copybook</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.0.0-beta3/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #1c1c1c;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 75%;
+            margin: 0 auto;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .form-label {
+            font-weight: bold;
+        }
+
+        .form-control-file {
+            color: #fff;
+            background-color: transparent;
+            border-color: #fff;
+        }
+
+        .form-control-file:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+
+        .table {
+            color: #fff;
+            background-color: #2c2c2c;
+        }
+
+        .table th {
+            background-color: #1f1f1f;
+            cursor: pointer;
+        }
+
+        .table td,
+        .table th {
+            border-color: #2c2c2c;
+            color: #fff;
+        }
+
+        .collapsed {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center">Analisador de Copybook</h1>
+        <div class="mb-3 text-center">
+            <label for="copybookFile" class="form-label">Selecione um arquivo Copybook COBOL:</label>
+            <input type="file" class="form-control-file" id="copybookFile">
+        </div>
+        <div class="text-center">
+            <button class="btn btn-primary" onclick="analisarCopybook()">Analisar</button>
+            <button class="btn btn-primary" onclick="gerarDadosMock()">Gerar Dados Mock</button>
+        </div>
+        <br>
+        <div class="text-center">
+            <button class="btn btn-primary" id="toggleTable">Expandir/Recolher Tabela</button>
+        </div>
+
+        <!-- Abas -->
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item " role="presentation">
+                <button class="nav-link active btn-primary" id="analisado-tab" data-bs-toggle="tab" data-bs-target="#analisado" type="button" role="tab" aria-controls="analisado" aria-selected="true">Analisado</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link btn-primary" id="mock-tab" data-bs-toggle="tab" data-bs-target="#mock" type="button" role="tab" aria-controls="mock" aria-selected="false">Mock Gerado</button>
+            </li>
+        </ul>
+
+        <!-- Conteúdo das abas -->
+        <div class="tab-content" id="myTabContent">
+            <div class="tab-pane fade show active" id="analisado" role="tabpanel" aria-labelledby="analisado-tab">
+                <div id="resultado" class="mt-4"></div>
+            </div>
+
+            <div class="tab-pane fade" id="mock" role="tabpanel" aria-labelledby="mock-tab">
+                <label for="numRegistros" class="form-label">Número de Registros:</label>
+                <input type="number" id="numRegistros" class="form-control" min="1" value="1">
+                <div id="dadosMock" class="mt-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Faker/3.1.0/faker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.0.0-beta3/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Código responsável por expandir e recolher a tabela inteira
+        $(document).ready(function() {
+            $("#toggleTable").click(function() {
+                $(".table tbody").toggleClass("collapsed");
+            });
+        });
+    </script>
+
+    <script>
+        var resultados = [];
+
+        function analisarCopybook() {
+            var copybookFile = document.getElementById("copybookFile").files[0];
+
+            if (copybookFile) {
+                var reader = new FileReader();
+
+                reader.onload = function (e) {
+                    var copybookContent = e.target.result;
+                    resultados = analisarLinhasCopybook(copybookContent);
+                    exibirResultados(resultados);
+                };
+
+                reader.readAsText(copybookFile);
+            } else {
+                alert("Selecione um arquivo Copybook COBOL.");
+            }
+        }
+
+        function analisarLinhasCopybook(copybookContent) {
+            var regexNivel = /[\s{6}\*(.)+]\s(\d{2})\s+(([a-zA-Z0-9\-]+)(\.|.+\.|.*\r?\n+.*\.))/g;
+            var nivelMatches;
+            var resultados = [];
+
+            while ((nivelMatches = regexNivel.exec(copybookContent)) !== null) {
+                var nivel = parseInt(nivelMatches[1]);
+                var nomeElemento = nivelMatches[2].trim();
+                var elemento = /([a-zA-Z0-9\-]+)/g.exec(nomeElemento);
+                var linha = nivelMatches[2].trim();
+
+                var campo = criarCampo(nivel, elemento[1].trim());
+                var tipo = determinarTipo(linha);
+                var tamanho = determinarTamanho(linha);
+                var value = determinarValue(linha);
+                var comp = determinarComp(linha);
+
+                campo.tipo = tipo;
+                campo.tamanho = tamanho;
+                campo.value = value;
+                campo.comp = comp;
+
+                resultados.push(campo);
+            }
+
+            return resultados;
+        }
+
+        function criarCampo(nivel, linha) {
+            return {
+                level: nivel,
+                nome: linha,
+                tipo: '',
+                tamanho: '',
+                value: '',
+                comp: ''
+            };
+        }
+
+        function determinarTipo(linha) {
+            if (linha.includes('OCCURS')) {
+                return 'OCCURS';
+            } else if (linha.includes('REDEFINES')) {
+                return 'REDEFINES';
+            } else if (linha.includes('PIC')) {
+                var regexTipo = /PIC\s+.*?\(\d+\)(\w\d+)\(\d+\)|PIC\s+.*?\(\d+\)(\w\d+)|PIC\s+.*?\(\d+\)(\w+)|PIC\s+([Z\.\,]+)|PIC\s+(.*?)(\.|\(|\s)\d+\)([a-zA-Z0-9]+)\((\d+)|PIC\s+(.*?)(\.|\(|\s)\d+\)|PIC\s+([a-zA-Z0-9]+)/;
+                var tipoMatches = regexTipo.exec(linha);
+                if (tipoMatches) {
+                    return tipoMatches[0].trim();
+                }
+            }
+
+            return '';
+        }
+
+        function determinarTamanho(linha) {
+            var regexTamanho = /\((\d+)\)/;
+            var tamanhoMatches = regexTamanho.exec(linha);
+            if (tamanhoMatches) {
+                return parseInt(tamanhoMatches[1].trim());
+            }
+
+            return '';
+        }
+
+        function determinarValue(linha) {
+            if (linha.includes('VALUE ')) {
+                if (linha.includes('VALUE ALL')) {
+                    return 'VALUE ALL';
+                } else if (linha.includes('VALUE')) {
+                    return 'VALUE';
+                }
+            } else if (linha.includes('SPACES')) {
+                return 'SPACES';
+            }
+
+            return '';
+        }
+
+        function determinarComp(linha) {
+            if (linha.includes('COMP-5')) {
+                return 'COMP-5';
+            } else if (linha.includes('COMP-4')) {
+                return 'COMP-4';
+            } else if (linha.includes('COMP-3')) {
+                return 'COMP-3';
+            } else if (linha.includes('COMP-2')) {
+                return 'COMP-2';
+            } else if (linha.includes('COMP-1')) {
+                return 'COMP-1';
+            } else if (linha.includes('COMP.')) {
+                return 'COMP';
+            }
+
+            return '';
+        }
+
+        function exibirResultados(resultados) {
+            var resultadoDiv = document.getElementById('resultado');
+            resultadoDiv.innerHTML = '';
+
+            if (resultados.length === 0) {
+                resultadoDiv.innerHTML = '<p>Nenhum campo encontrado.</p>';
+                return;
+            }
+
+            var table = document.createElement('table');
+            table.classList.add('table', 'table-striped');
+
+            var thead = document.createElement('thead');
+            var trHead = document.createElement('tr');
+            var headers = ['Level', 'Campo', 'Tipo', 'Tamanho', 'Value', 'Comp', 'MOCK'];
+
+            for (var i = 0; i < headers.length; i++) {
+                var th = document.createElement('th');
+                th.scope = 'col';
+                th.textContent = headers[i];
+                trHead.appendChild(th);
+            }
+
+            thead.appendChild(trHead);
+            table.appendChild(thead);
+
+            
+            var tbody = document.createElement('tbody');
+            for (var j = 0; j < resultados.length; j++) {
+                var campo = resultados[j];
+
+                var tr = document.createElement('tr');
+                var tdLevel = document.createElement('td');
+                tdLevel.textContent = campo.level;
+
+                var tdCampo = document.createElement('td');
+                tdCampo.textContent = campo.nome;
+
+                var tdTipo = document.createElement('td');
+                tdTipo.textContent = campo.tipo;
+
+                var tdTamanho = document.createElement('td');
+                tdTamanho.textContent = campo.tamanho;
+
+                var tdValue = document.createElement('td');
+                tdValue.textContent = campo.value;
+
+                var tdComp = document.createElement('td');
+                tdComp.textContent = campo.comp;
+
+                var tdInputValue = document.createElement('td');
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.id = 'input-' + j;
+                input.value = '#'.repeat(campo.tamanho); 
+                input.addEventListener('input', function(e) {
+                    var index = e.target.id.split('-')[1];
+                    resultados[index].value = e.target.value;
+                });
+                tdInputValue.appendChild(input);
+
+                tr.appendChild(tdLevel);
+                tr.appendChild(tdCampo);
+                tr.appendChild(tdTipo);
+                tr.appendChild(tdTamanho);
+                tr.appendChild(tdValue);
+                tr.appendChild(tdComp);
+                tr.appendChild(tdInputValue);
+
+                tbody.appendChild(tr);
+            }
+
+            table.appendChild(tbody);
+
+            resultadoDiv.appendChild(table);
+        }
+
+        function gerarDadosMock() {
+            var dadosMockDiv = document.getElementById('dadosMock');
+            dadosMockDiv.innerHTML = '';
+
+            if (resultados.length === 0) {
+                dadosMockDiv.innerHTML = '<p>Nenhum campo encontrado.</p>';
+                return;
+            }
+                        // Botão de download
+            var downloadButton = document.createElement('button');
+            downloadButton.classList.add('btn', 'btn-primary');
+            downloadButton.textContent = 'Download Dados Mock';
+            downloadButton.addEventListener('click', downloadDadosMock);
+            dadosMockDiv.appendChild(downloadButton);
+
+            var table = document.createElement('table');
+            table.classList.add('table', 'table-striped');
+
+            var thead = document.createElement('thead');
+            var trHead = document.createElement('tr');
+            var headers = ['Campo', 'Dado Mock'];
+
+            for (var i = 0; i < headers.length; i++) {
+                var th = document.createElement('th');
+                th.scope = 'col';
+                th.textContent = headers[i];
+                trHead.appendChild(th);
+            }
+
+            thead.appendChild(trHead);
+            table.appendChild(thead);
+
+            var tbody = document.createElement('tbody');
+            for (var k = 0; k < resultados.length; k++) {
+                var campo = resultados[k];
+
+                var tr = document.createElement('tr');
+                var tdCampo = document.createElement('td');
+                tdCampo.textContent = campo.nome;
+
+                var tdMockData = document.createElement('td');
+                tdMockData.id = 'mockData-' + k;
+
+                tr.appendChild(tdCampo);
+                tr.appendChild(tdMockData);
+
+                tbody.appendChild(tr);
+            }
+
+            table.appendChild(tbody);
+
+            dadosMockDiv.appendChild(table);
+
+            for (var k = 0; k < resultados.length; k++) {
+                var campo = resultados[k];
+                var tdMockData = document.getElementById('mockData-' + k);
+                var inputValue = document.getElementById('input-' + k).value;
+
+                if (inputValue.includes('#')) {
+                    var mockValue = '';
+
+                    for (var i = 0; i < inputValue.length; i++) {
+                        if (inputValue[i] === '#') {
+                            mockValue += gerarDadoMock(campo.tipo, 1);
+                        } else {
+                            mockValue += inputValue[i];
+                        }
+                    }
+
+                    tdMockData.textContent = mockValue;
+                } else {
+                    tdMockData.textContent = inputValue;
+                }
+        }
+
+
+        }
+
+        function downloadDadosMock() {
+            var numRegistros = parseInt(document.getElementById('numRegistros').value);
+            var dadosMockConcatenados = '';
+
+            for (var n = 0; n < numRegistros; n++) {
+                var registroAtual = resultados.map(function (campo) {
+                var mockValue = '';
+                var inputValue = document.getElementById('input-' + resultados.indexOf(campo)).value;
+
+                if (inputValue.includes('#')) {
+                    for (var i = 0; i < inputValue.length; i++) {
+                        if (inputValue[i] === '#') {
+                            mockValue += gerarDadoMock(campo.tipo, 1);
+                        } else {
+                            mockValue += inputValue[i];
+                        }
+                    }
+                } else {
+                    for (var i = 0; i < campo.tamanho; i++) {
+                        mockValue += gerarDadoMock(campo.tipo, 1);
+                    }
+                }
+
+            return mockValue;
+        }).join('');
+        dadosMockConcatenados += registroAtual + '\n';
+    }
+
+            var element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(dadosMockConcatenados));
+            element.setAttribute('download', 'dados_mock.txt');
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+
+        function gerarDadoMock(tipo, tamanho) {
+
+            if (/^PIC\s+X/i.test(tipo)) {
+                return faker.random.alphaNumeric(1).toUpperCase();
+            } else if (/^PIC\s+S9/i.test(tipo)) {
+                if (tipo.includes('V')) {
+                    var integerPart = tamanho;
+                    var decimalPart = 0;
+
+                    if (tipo.includes('V9')) {
+                        var regexDecimalPart = /V9\((\d+)\)/;
+                        var decimalPartMatches = regexDecimalPart.exec(tipo);
+                        if (decimalPartMatches) {
+                            decimalPart = parseInt(decimalPartMatches[1]);
+                        }
+                    }
+
+                    var number = faker.random.number({ min: 0, max: Math.pow(10, integerPart) - 1 });
+                    return number.toString().padStart(integerPart, '0');
+                } else {
+                    return faker.random.number({ min: 0, max: Math.pow(10, tamanho) - 1 }).toString().padStart(tamanho, '0');
+                }
+            } else if (/^PIC\s+9/i.test(tipo)) {
+                if (tipo.includes('V')) {
+                    var integerPart = tamanho;
+                    var decimalPart = 0;
+
+                    if (tipo.includes('V9')) {
+                        var regexDecimalPart = /V9\((\d+)\)/;
+                        var decimalPartMatches = regexDecimalPart.exec(tipo);
+                        if (decimalPartMatches) {
+                            decimalPart = parseInt(decimalPartMatches[1]);
+                        }
+                    }
+
+                    var number = faker.random.number({ min: 0, max: Math.pow(10, integerPart - decimalPart) - 1 });
+                    return number.toString().padStart(integerPart - decimalPart, '0').toUpperCase();
+                } else {
+                    return faker.random.number({ min: 0, max: Math.pow(10, tamanho) - 1 }).toString().padStart(tamanho, '0');
+                }
+            } else if (/^PIC\s+Z/i.test(tipo)) {
+                var regexGroupingSymbol = /Z\.(Z{3}\.)*Z{3},/;
+                var groupingSymbolMatches = regexGroupingSymbol.exec(tipo);
+                if (groupingSymbolMatches) {
+                    var groupingSymbol = groupingSymbolMatches[0];
+                    var decimalPart = tamanho - groupingSymbol.length;
+
+                    var maskedNumber = '';
+                    for (var i = 0; i < tamanho; i++) {
+                        if (tipo[i] === 'Z') {
+                            var digit = faker.random.number({ min: 0, max: 9 });
+                            maskedNumber += digit.toString();
+                        } else {
+                            maskedNumber += tipo[i];
+                        }
+                    }
+
+                    return maskedNumber;
+                }
+            }
+
+            return '';
+        }
+    
+
+    </script>
+</body>
+</html>

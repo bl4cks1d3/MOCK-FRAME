@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Analisador de Copybook</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.0.0-beta3/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #1c1c1c;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 75%;
+            margin: 0 auto;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .form-label {
+            font-weight: bold;
+        }
+
+        .form-control-file {
+            color: #fff;
+            background-color: transparent;
+            border-color: #fff;
+        }
+
+        .form-control-file:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+
+        .table {
+            color: #fff;
+            background-color: #2c2c2c;
+        }
+
+        .table th {
+            background-color: #1f1f1f;
+            cursor: pointer;
+        }
+
+        .table td,
+        .table th {
+            border-color: #2c2c2c;
+            color: #fff;
+        }
+
+        .collapsed {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center">Analisador de Copybook</h1>
+        <div class="mb-3 text-center">
+            <label for="copybookFile" class="form-label">Selecione um arquivo Copybook COBOL:</label>
+            <input type="file" class="form-control-file" id="copybookFile">
+        </div>
+        <div class="text-center">
+            <button class="btn btn-primary" onclick="analisarCopybook()">Analisar</button>
+        </div>
+        <br>
+        <div class="text-center">
+            <button class="btn btn-primary" id="toggleTable">Expandir/Recolher Tabela</button>
+        </div>
+        <div id="resultado" class="mt-4"></div>
+
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script>
+        // Código responsável por expandir e recolher a tabela inteira
+        $(document).ready(function() {
+            $("#toggleTable").click(function() {
+                $(".table tbody").toggleClass("collapsed");
+            });
+        });
+    </script>
+
+    <script>
+        function analisarCopybook() {
+            var copybookFile = document.getElementById("copybookFile").files[0];
+
+            if (copybookFile) {
+                var reader = new FileReader();
+
+                reader.onload = function (e) {
+                    var copybookContent = e.target.result;
+                    var resultados = analisarLinhasCopybook(copybookContent);
+                    exibirResultados(resultados);
+                };
+
+                reader.readAsText(copybookFile);
+            } else {
+                alert("Selecione um arquivo Copybook COBOL.");
+            }
+        }
+
+        function analisarLinhasCopybook(copybookContent) {
+            var regexNivel = /[\s{6}\*(.)+]\s(\d{2})\s+(([a-zA-Z0-9\-]+)(\.|.+\.|.*\r?\n+.*\.))/g;
+            var nivelMatches;
+            var resultados = [];
+
+            while ((nivelMatches = regexNivel.exec(copybookContent)) !== null) {
+                
+                var nivel = parseInt(nivelMatches[1]);
+                var nomeElemento = nivelMatches[2].trim();
+                var elemento = /([a-zA-Z0-9\-]+)/g.exec(nomeElemento);
+                var linha = nivelMatches[2].trim();
+
+
+                var campo = criarCampo(nivel, elemento[1].trim());
+                var tipo = determinarTipo(linha);
+                var tamanho = determinarTamanho(linha);
+                var value = determinarValue(linha);
+                var comp = determinarComp(linha);
+
+                campo.tipo = tipo;
+                campo.tamanho = tamanho;
+                campo.value = value;
+                campo.comp = comp;
+
+                resultados.push(campo);
+            }
+
+            return resultados;
+        }
+
+        function criarCampo(nivel, linha) {
+            return {
+                level: nivel,
+                nome: linha,
+                tipo: '',
+                tamanho: '',
+                value: '',
+                comp: ''
+            };
+        }
+
+        function determinarTipo(linha) {
+
+            if (linha.includes('OCCURS')) {
+                return 'OCCURS';
+            } else if (linha.includes('REDEFINES')) {
+                return 'REDEFINES';
+            } else if (linha.includes('PIC')) {
+                var regexTipo = /PIC\s+.*?\(\d+\)(\w\d+)\(\d+\)|PIC\s+.*?\(\d+\)(\w\d+)|PIC\s+.*?\(\d+\)(\w+)|PIC\s+([Z\.\,]+)|PIC\s+(.*?)(\.|\(|\s)\d+\)([a-zA-Z0-9]+)\((\d+)|PIC\s+(.*?)(\.|\(|\s)\d+\)|PIC\s+([a-zA-Z0-9]+)/;
+                var tipoMatches = regexTipo.exec(linha);
+                if (tipoMatches) {
+                    return tipoMatches[0].trim();
+                }
+            }
+
+            return '';
+        }
+
+        function determinarTamanho(linha) {
+            var regexTamanho = /\((\d+)\)/;
+            var tamanhoMatches = regexTamanho.exec(linha);
+            if (tamanhoMatches) {
+                return parseInt(tamanhoMatches[1].trim());
+            }
+
+            return '';
+        }
+
+        function determinarValue(linha) {
+            if (linha.includes('VALUE ')) {
+                if (linha.includes('VALUE ALL')) {
+                    return 'VALUE ALL';
+                } else if (linha.includes('VALUE')) {
+                    return 'VALUE';
+                }
+            } else if (linha.includes('SPACES')) {
+                return 'SPACES';
+            }
+
+            return '';
+        }
+
+        function determinarComp(linha) {
+            if (linha.includes('COMP-5')) {
+                return 'COMP-5';
+            } else if (linha.includes('COMP-4')) {
+                return 'COMP-4';
+            } else if (linha.includes('COMP-3')) {
+                return 'COMP-3';
+            } else if (linha.includes('COMP-2')) {
+                return 'COMP-2';
+            } else if (linha.includes('COMP-1')) {
+                return 'COMP-1';
+            } else if (linha.includes('COMP.')) {
+                return 'COMP';
+            }
+
+            return '';
+        }
+
+        function exibirResultados(resultados) {
+            var resultadoDiv = document.getElementById('resultado');
+            resultadoDiv.innerHTML = '';
+
+            if (resultados.length === 0) {
+                resultadoDiv.innerHTML = '<p>Nenhum campo encontrado.</p>';
+                return;
+            }
+
+            var table = document.createElement('table');
+            table.classList.add('table', 'table-striped');
+
+            var thead = document.createElement('thead');
+            var trHead = document.createElement('tr');
+            var headers = ['Level', 'Campo', 'Tipo', 'Tamanho', 'Value', 'Comp'];
+
+            for (var i = 0; i < headers.length; i++) {
+                var th = document.createElement('th');
+                th.scope = 'col';
+                th.textContent = headers[i];
+                trHead.appendChild(th);
+            }
+
+            thead.appendChild(trHead);
+            table.appendChild(thead);
+
+            var tbody = document.createElement('tbody');
+            for (var j = 0; j < resultados.length; j++) {
+                var campo = resultados[j];
+
+                var tr = document.createElement('tr');
+                var tdLevel = document.createElement('td');
+                tdLevel.textContent = campo.level;
+
+                var tdCampo = document.createElement('td');
+                tdCampo.textContent = campo.nome;
+
+                var tdTipo = document.createElement('td');
+                tdTipo.textContent = campo.tipo;
+
+                var tdTamanho = document.createElement('td');
+                tdTamanho.textContent = campo.tamanho;
+
+                var tdValue = document.createElement('td');
+                tdValue.textContent = campo.value;
+
+                var tdComp = document.createElement('td');
+                tdComp.textContent = campo.comp;
+
+                tr.appendChild(tdLevel);
+                tr.appendChild(tdCampo);
+                tr.appendChild(tdTipo);
+                tr.appendChild(tdTamanho);
+                tr.appendChild(tdValue);
+                tr.appendChild(tdComp);
+
+                tbody.appendChild(tr);
+            }
+
+            table.appendChild(tbody);
+
+            resultadoDiv.appendChild(table);
+        }
+    </script>
+</body>
+</html>

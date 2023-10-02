@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Processamento de arquivo COBOL</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="fileInput" />
+    <table id="outputTable">
+        <thead>
+            <tr>
+                <th>Nome</th>
+                <th>Valor</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            var reader = new FileReader();
+
+            reader.onload = function(e) {
+                var contents = e.target.result;
+                var extractedInfo = extractInfoFromCOBOL(contents);
+                displayInfoInTable(extractedInfo);
+            };
+
+            reader.readAsText(file);
+        });
+
+        function extractInfoFromCOBOL(contents) {
+            var regexList = [
+                { name: 'bookName', regex: /NOME BOOK\s+:\s+(.*)/ },
+                { name: 'description', regex: /DESCRICAO\s+:\s+(.*)/ },
+                { name: 'date', regex: /DATA\s+:\s+(.*)/ },
+                { name: 'author', regex: /AUTOR\s+:\s+(.*)/ },
+                { name: 'size', regex: /TAMANHO\s+:\s+(\d+)/ },
+                { name: 'fields', regex: /01\s+(\w+)-REGISTRO\.\s*\n((\s{6}.+\n)+)/ },
+                { name: 'sectionFields', regex: /(\d+)\s+(\w+)\s+PIC\s+(.*)/ },
+                { name: 'fieldSize', regex: /(\d+)\((\d+)\)/ },
+                { name: 'comp', regex: /COMP/ },
+                { name: 'fieldNames', regex: /\d+\s+(\w+)/ },
+                { name: 'fieldLevels', regex: /(\d+)/ },
+                { name: 'fieldDescription', regex: /\*\s+(.+)\s+/ },
+                { name: 'compactedFields', regex: /\s+(\w+)\s+PIC\s+(.+)COMP/ },
+                { name: 'nonCompactedFields', regex: /\s+(\w+)\s+PIC\s+(.+)/ },
+                { name: 'fieldType', regex: /PIC\s+(\S+)/ },
+                { name: 'sectionName', regex: /(\d+)\s+(\w+)/ },
+                { name: 'specificSectionFields', regex: /(\d+)\s+(\w+)\s+PIC\s+(.*)/ },
+                { name: 'fieldSequenceNumber', regex: /\d+\s+(\d+)\s+/ },
+                { name: 'sectionElements', regex: /(\d+)\s+(\w+)\.\n((\s{4}.+\n)+)/ },
+                { name: 'comments', regex: /\*\s+(.+)/ },
+                // Add more regex here...
+            ];
+
+            var extractedInfo = {};
+
+            for (var i = 0; i < regexList.length; i++) {
+                var regexInfo = regexList[i];
+                var match = contents.match(regexInfo.regex);
+                extractedInfo[regexInfo.name] = match ? match[1] : '';
+            }
+
+            return extractedInfo;
+        }
+
+        functiondisplayInfoInTable(extractedInfo) {
+            var tbody = document.querySelector('#outputTable tbody');
+
+            for (var key in extractedInfo) {
+                var row = document.createElement('tr');
+                var nameCell = document.createElement('td');
+                var valueCell = document.createElement('td');
+                nameCell.textContent = key;
+                valueCell.textContent = extractedInfo[key];
+                row.appendChild(nameCell);
+                row.appendChild(valueCell);
+                tbody.appendChild(row);
+            }
+        }
+    </script>
+</body>
+</html>
